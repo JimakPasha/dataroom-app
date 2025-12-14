@@ -13,7 +13,7 @@ A modern, full-featured Data Room application built with React, TypeScript, and 
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/JimakPasha/dataroom-app.git
+   git clone https://github.com/JimakPasha/dataroom-app.git OR get .zip
    cd dataroom-app
    ```
 

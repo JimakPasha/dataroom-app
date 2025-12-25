@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { createFolder } from '@/store/folderSlice';
-import { setCreateFolderDialogOpen } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import {
@@ -19,7 +19,7 @@ import { Spinner } from '../ui/spinner';
 
 export const CreateFolderDialog = () => {
   const dispatch = useAppDispatch();
-  const { isCreateFolderDialogOpen } = useAppSelector((state) => state.ui);
+  const { isCreateFolderDialogOpen, closeCreateFolderDialog } = useDialog();
   const { currentFolderId } = useAppSelector((state) => state.folder);
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
   const { folders } = useAppSelector((state) => state.folder);
@@ -62,7 +62,7 @@ export const CreateFolderDialog = () => {
           dataRoomId: activeDataRoomId,
         })
       ).unwrap();
-      dispatch(setCreateFolderDialogOpen(false));
+      closeCreateFolderDialog();
       setName('');
       toast({
         title: 'Folder created',
@@ -80,7 +80,9 @@ export const CreateFolderDialog = () => {
   };
 
   return (
-    <Dialog open={isCreateFolderDialogOpen} onOpenChange={(open) => dispatch(setCreateFolderDialogOpen(open))}>
+    <Dialog open={isCreateFolderDialogOpen} onOpenChange={(open) => {
+      if (!open) closeCreateFolderDialog();
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create Folder</DialogTitle>
@@ -100,7 +102,7 @@ export const CreateFolderDialog = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => dispatch(setCreateFolderDialogOpen(false))}
+              onClick={closeCreateFolderDialog}
               disabled={loading}
             >
               Cancel

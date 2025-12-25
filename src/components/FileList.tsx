@@ -1,9 +1,10 @@
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
 import { setViewingFile } from '@/store/fileSlice';
-import { setSelectedItem, setRenameDialogOpen, setItemInfoDialogOpen, setDeleteItemDialogOpen } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { setCurrentFolder } from '@/store/folderSlice';
 import { setSortBy, setSortDirection } from '@/store/settingsSlice';
-import { File as FileIcon, Folder, MoreVertical, Trash2, Edit, Info, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { File as FileIcon, Folder as FolderIcon, MoreVertical, Trash2, Edit, Info, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import { formatFileSize, formatDate, getFileIcon } from '@/lib/utils';
 import { Card } from './ui/card';
 import {
@@ -22,9 +23,17 @@ import { Button } from './ui/button';
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/db';
+import type { File } from '@/types';
+import type { Folder } from '@/types';
 
-export const FileList = () => {
+interface FileListProps {
+  frozenFiles?: File[];
+  frozenFolders?: Folder[];
+}
+
+export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => {
   const dispatch = useAppDispatch();
+  const { openRenameDialog, openDeleteItemDialog, openItemInfoDialog } = useDialog();
   const { files } = useAppSelector((state) => state.file);
   const { folders, currentFolderId } = useAppSelector((state) => state.folder);
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
@@ -33,11 +42,11 @@ export const FileList = () => {
   const [hoveredItemType, setHoveredItemType] = useState<'file' | 'folder' | null>(null);
   const contextMenuClickedRef = useRef<string | null>(null);
 
-  const currentFiles = files.filter(
+  const currentFiles = frozenFiles ?? files.filter(
     (f) => f.folderId === currentFolderId && f.dataRoomId === activeDataRoomId
   );
 
-  const currentFolders = folders.filter(
+  const currentFolders = frozenFolders ?? folders.filter(
     (f) => f.parentId === currentFolderId && f.dataRoomId === activeDataRoomId
   );
 
@@ -116,13 +125,13 @@ export const FileList = () => {
   const handleRename = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setRenameDialogOpen(true));
+    openRenameDialog();
   };
 
   const handleDelete = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setDeleteItemDialogOpen(true));
+    openDeleteItemDialog();
   };
 
   const handleDownload = async (fileId: string, e: React.MouseEvent) => {
@@ -144,15 +153,14 @@ export const FileList = () => {
         URL.revokeObjectURL(url);
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(error);
+      console.error('Failed to download file:', error);
     }
   };
 
   const handleInfo = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setItemInfoDialogOpen(true));
+    openItemInfoDialog();
   };
 
   if (!activeDataRoomId) {
@@ -180,7 +188,7 @@ export const FileList = () => {
     const isHovered = hoveredItemId === item.id && hoveredItemType === type;
     let Icon, iconColor;
     if (isFolder) {
-      Icon = Folder;
+      Icon = FolderIcon;
       iconColor = 'text-blue-500';
     } else {
       const fileIconInfo = getFileIcon((item as typeof currentFiles[0]).type);
@@ -408,7 +416,7 @@ export const FileList = () => {
     const isFolder = type === 'folder';
     let Icon, iconColor;
     if (isFolder) {
-      Icon = Folder;
+      Icon = FolderIcon;
       iconColor = 'text-blue-500';
     } else {
       const fileIconInfo = getFileIcon((item as typeof currentFiles[0]).type);

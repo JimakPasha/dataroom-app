@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { updateDataRoom } from '@/store/dataroomSlice';
-import { setRenameDataRoomDialogOpen, setSelectedDataRoomId } from '@/store/uiSlice';
+import { setSelectedDataRoomId } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import {
@@ -19,30 +20,30 @@ import { Spinner } from '../ui/spinner';
 
 export const RenameDataRoomDialog = () => {
   const dispatch = useAppDispatch();
-  const { isRenameDataRoomDialogOpen, selectedDataRoomId } = useAppSelector((state) => state.ui);
+  const { isRenameDataRoomDialogOpen, closeRenameDataRoomDialog } = useDialog();
+  const { selectedDataRoomId } = useAppSelector((state) => state.ui);
   const { dataRooms } = useAppSelector((state) => state.dataroom);
   const { toast } = useToast();
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const dataRoom = selectedDataRoomId 
     ? dataRooms.find((dr) => dr.id === selectedDataRoomId)
     : null;
 
-  useEffect(() => {
-    if (dataRoom) {
-      setName(dataRoom.name);
-    }
-  }, [dataRoom]);
+  
+  const currentName = dataRoom?.name ?? '';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!dataRoom || !selectedDataRoomId) {
       return;
     }
 
-    const sanitizedName = sanitizeFileName(name);
+    // Get value from form
+    const formData = new FormData(e.currentTarget);
+    const inputValue = formData.get('name') as string || currentName;
+    const sanitizedName = sanitizeFileName(inputValue);
     const validation = validateFolderName(sanitizedName);
 
     if (!validation.valid) {
@@ -61,7 +62,7 @@ export const RenameDataRoomDialog = () => {
     setLoading(true);
     try {
       await dispatch(updateDataRoom({ ...dataRoom, name: uniqueName })).unwrap();
-      dispatch(setRenameDataRoomDialogOpen(false));
+      closeRenameDataRoomDialog();
       dispatch(setSelectedDataRoomId(null));
       toast({
         title: 'Data room renamed',
@@ -82,8 +83,8 @@ export const RenameDataRoomDialog = () => {
     <Dialog 
       open={isRenameDataRoomDialogOpen} 
       onOpenChange={(open) => {
-        dispatch(setRenameDataRoomDialogOpen(open));
         if (!open) {
+          closeRenameDataRoomDialog();
           dispatch(setSelectedDataRoomId(null));
         }
       }}
@@ -96,9 +97,9 @@ export const RenameDataRoomDialog = () => {
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <Input
+              name="name"
               placeholder="Data room name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              defaultValue={currentName}
               autoFocus
               disabled={loading}
             />
@@ -108,14 +109,14 @@ export const RenameDataRoomDialog = () => {
               type="button"
               variant="outline"
               onClick={() => {
-                dispatch(setRenameDataRoomDialogOpen(false));
+                closeRenameDataRoomDialog();
                 dispatch(setSelectedDataRoomId(null));
               }}
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !name.trim()}>
+            <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Spinner size="sm" className="mr-2" />

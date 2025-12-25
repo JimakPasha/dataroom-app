@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { updateFolder } from '@/store/folderSlice';
 import { updateFile } from '@/store/fileSlice';
-import { setRenameDialogOpen, setSelectedItem } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName, validateFileName } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import {
@@ -20,11 +21,11 @@ import { Spinner } from '../ui/spinner';
 
 export const RenameDialog = () => {
   const dispatch = useAppDispatch();
-  const { isRenameDialogOpen, selectedItem } = useAppSelector((state) => state.ui);
+  const { isRenameDialogOpen, closeRenameDialog } = useDialog();
+  const { selectedItem } = useAppSelector((state) => state.ui);
   const { folders } = useAppSelector((state) => state.folder);
   const { files } = useAppSelector((state) => state.file);
   const { toast } = useToast();
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const folder = selectedItem?.type === 'folder' 
@@ -35,20 +36,19 @@ export const RenameDialog = () => {
     : null;
   const item = folder || file;
 
-  useEffect(() => {
-    if (item) {
-      setName(item.name);
-    }
-  }, [item]);
+  
+  const currentName = item?.name ?? '';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedItem) {
       return;
     }
 
-    const sanitizedName = sanitizeFileName(name);
+    const formData = new FormData(e.currentTarget);
+    const inputValue = formData.get('name') as string || currentName;
+    const sanitizedName = sanitizeFileName(inputValue);
 
     if (selectedItem.type === 'folder' && folder) {
       const validation = validateFolderName(sanitizedName);
@@ -70,7 +70,7 @@ export const RenameDialog = () => {
       setLoading(true);
       try {
         await dispatch(updateFolder({ ...folder, name: uniqueName })).unwrap();
-        dispatch(setRenameDialogOpen(false));
+        closeRenameDialog();
         dispatch(setSelectedItem(null));
         toast({
           title: 'Folder renamed',
@@ -105,7 +105,7 @@ export const RenameDialog = () => {
       setLoading(true);
       try {
         await dispatch(updateFile({ ...file, name: uniqueName })).unwrap();
-        dispatch(setRenameDialogOpen(false));
+        closeRenameDialog();
         dispatch(setSelectedItem(null));
         toast({
           title: 'File renamed',
@@ -124,7 +124,15 @@ export const RenameDialog = () => {
   };
 
   return (
-    <Dialog open={isRenameDialogOpen} onOpenChange={(open) => dispatch(setRenameDialogOpen(open))}>
+    <Dialog 
+      open={isRenameDialogOpen} 
+      onOpenChange={(open) => {
+        if (!open) {
+          closeRenameDialog();
+          dispatch(setSelectedItem(null));
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rename {selectedItem?.type === 'folder' ? 'Folder' : 'File'}</DialogTitle>
@@ -133,9 +141,9 @@ export const RenameDialog = () => {
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <Input
+              name="name"
               placeholder={`${selectedItem?.type === 'folder' ? 'Folder' : 'File'} name`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              defaultValue={currentName}
               autoFocus
               disabled={loading}
             />
@@ -145,14 +153,14 @@ export const RenameDialog = () => {
               type="button"
               variant="outline"
               onClick={() => {
-                dispatch(setRenameDialogOpen(false));
+                closeRenameDialog();
                 dispatch(setSelectedItem(null));
               }}
               disabled={loading}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || !name.trim()}>
+            <Button type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Spinner size="sm" className="mr-2" />

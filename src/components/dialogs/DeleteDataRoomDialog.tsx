@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { deleteDataRoom } from '@/store/dataroomSlice';
-import { setDeleteDataRoomDialogOpen, setSelectedDataRoomId } from '@/store/uiSlice';
+import { setSelectedDataRoomId } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -19,7 +20,8 @@ import { Spinner } from '../ui/spinner';
 export const DeleteDataRoomDialog = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { isDeleteDataRoomDialogOpen, selectedDataRoomId } = useAppSelector((state) => state.ui);
+  const { isDeleteDataRoomDialogOpen, closeDeleteDataRoomDialog } = useDialog();
+  const { selectedDataRoomId } = useAppSelector((state) => state.ui);
   const { dataRooms, activeDataRoomId } = useAppSelector((state) => state.dataroom);
   const { toast } = useToast();
   const [deleting, setDeleting] = useState(false);
@@ -36,7 +38,7 @@ export const DeleteDataRoomDialog = () => {
     setDeleting(true);
     try {
       await dispatch(deleteDataRoom(selectedDataRoomId)).unwrap();
-      dispatch(setDeleteDataRoomDialogOpen(false));
+      closeDeleteDataRoomDialog();
       dispatch(setSelectedDataRoomId(null));
       toast({
         title: 'Data room deleted',
@@ -60,8 +62,8 @@ export const DeleteDataRoomDialog = () => {
     <Dialog 
       open={isDeleteDataRoomDialogOpen} 
       onOpenChange={(open) => {
-        dispatch(setDeleteDataRoomDialogOpen(open));
         if (!open) {
+          closeDeleteDataRoomDialog();
           dispatch(setSelectedDataRoomId(null));
         }
       }}
@@ -103,7 +105,7 @@ export const DeleteDataRoomDialog = () => {
             type="button"
             variant="outline"
             onClick={() => {
-              dispatch(setDeleteDataRoomDialogOpen(false));
+              closeDeleteDataRoomDialog();
               dispatch(setSelectedDataRoomId(null));
             }}
             disabled={deleting}

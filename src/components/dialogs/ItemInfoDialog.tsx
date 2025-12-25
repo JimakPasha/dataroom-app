@@ -1,5 +1,5 @@
-import { useAppSelector, useAppDispatch } from '@/hooks/redux';
-import { setItemInfoDialogOpen } from '@/store/uiSlice';
+import { useAppSelector } from '@/hooks/redux';
+import { useDialog } from '@/contexts/DialogContext';
 import { formatFileSize, formatDate, cn, getFileIcon } from '@/lib/utils';
 import {
   Dialog,
@@ -11,8 +11,8 @@ import {
 import { Folder } from 'lucide-react';
 
 export const ItemInfoDialog = () => {
-  const dispatch = useAppDispatch();
-  const { isItemInfoDialogOpen, selectedItem } = useAppSelector((state) => state.ui);
+  const { isItemInfoDialogOpen, closeItemInfoDialog } = useDialog();
+  const { selectedItem } = useAppSelector((state) => state.ui);
   const { folders } = useAppSelector((state) => state.folder);
   const { files } = useAppSelector((state) => state.file);
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
@@ -62,7 +62,9 @@ export const ItemInfoDialog = () => {
   }
 
   return (
-    <Dialog open={isItemInfoDialogOpen} onOpenChange={(open) => dispatch(setItemInfoDialogOpen(open))}>
+    <Dialog open={isItemInfoDialogOpen} onOpenChange={(open) => {
+      if (!open) closeItemInfoDialog();
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

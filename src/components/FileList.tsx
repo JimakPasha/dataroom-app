@@ -3,7 +3,7 @@ import { setViewingFile } from '@/store/fileSlice';
 import { setSelectedItem, setRenameDialogOpen, setItemInfoDialogOpen, setDeleteItemDialogOpen } from '@/store/uiSlice';
 import { setCurrentFolder } from '@/store/folderSlice';
 import { setSortBy, setSortDirection } from '@/store/settingsSlice';
-import { File as FileIcon, Folder, MoreVertical, Trash2, Edit, Info, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import { File as FileIcon, Folder as FolderIcon, MoreVertical, Trash2, Edit, Info, ArrowUp, ArrowDown, Download } from 'lucide-react';
 import { formatFileSize, formatDate, getFileIcon } from '@/lib/utils';
 import { Card } from './ui/card';
 import {
@@ -22,8 +22,15 @@ import { Button } from './ui/button';
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { db } from '@/lib/db';
+import type { File } from '@/types';
+import type { Folder } from '@/types';
 
-export const FileList = () => {
+interface FileListProps {
+  frozenFiles?: File[];
+  frozenFolders?: Folder[];
+}
+
+export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => {
   const dispatch = useAppDispatch();
   const { files } = useAppSelector((state) => state.file);
   const { folders, currentFolderId } = useAppSelector((state) => state.folder);
@@ -33,11 +40,13 @@ export const FileList = () => {
   const [hoveredItemType, setHoveredItemType] = useState<'file' | 'folder' | null>(null);
   const contextMenuClickedRef = useRef<string | null>(null);
 
-  const currentFiles = files.filter(
+  // Используем замороженные данные, если они предоставлены (во время загрузки)
+  // Замороженные данные уже отфильтрованы, поэтому не фильтруем их снова
+  const currentFiles = frozenFiles ?? files.filter(
     (f) => f.folderId === currentFolderId && f.dataRoomId === activeDataRoomId
   );
 
-  const currentFolders = folders.filter(
+  const currentFolders = frozenFolders ?? folders.filter(
     (f) => f.parentId === currentFolderId && f.dataRoomId === activeDataRoomId
   );
 
@@ -180,7 +189,7 @@ export const FileList = () => {
     const isHovered = hoveredItemId === item.id && hoveredItemType === type;
     let Icon, iconColor;
     if (isFolder) {
-      Icon = Folder;
+      Icon = FolderIcon;
       iconColor = 'text-blue-500';
     } else {
       const fileIconInfo = getFileIcon((item as typeof currentFiles[0]).type);
@@ -408,7 +417,7 @@ export const FileList = () => {
     const isFolder = type === 'folder';
     let Icon, iconColor;
     if (isFolder) {
-      Icon = Folder;
+      Icon = FolderIcon;
       iconColor = 'text-blue-500';
     } else {
       const fileIconInfo = getFileIcon((item as typeof currentFiles[0]).type);

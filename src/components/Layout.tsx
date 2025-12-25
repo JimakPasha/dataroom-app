@@ -22,7 +22,7 @@ import {
 } from './ui/context-menu';
 import { TooltipProvider } from './ui/tooltip';
 import { setLayoutMode } from '@/store/settingsSlice';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { fetchFolders } from '@/store/folderSlice';
 import { fetchFiles, createFile } from '@/store/fileSlice';
 import { Spinner } from './ui/spinner';
@@ -43,6 +43,9 @@ export const Layout = () => {
   const [uploading, setUploading] = useState(false);
   const dragCounterRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const frozenContentRef = useRef<'empty' | 'files' | null>(null);
+  const frozenFilesRef = useRef<typeof files>([]);
+  const frozenFoldersRef = useRef<typeof folders>([]);
 
   useEffect(() => {
     if (activeDataRoomId) {
@@ -71,10 +74,24 @@ export const Layout = () => {
     }
   }, [filesError, toast]);
 
-  const currentFiles = files.filter((f) => f.folderId === currentFolderId && f.dataRoomId === activeDataRoomId);
-  const currentFolders = folders.filter((f) => f.parentId === currentFolderId && f.dataRoomId === activeDataRoomId);
+  const currentFiles = useMemo(
+    () => files.filter((f) => f.folderId === currentFolderId && f.dataRoomId === activeDataRoomId),
+    [files, currentFolderId, activeDataRoomId]
+  );
+  const currentFolders = useMemo(
+    () => folders.filter((f) => f.parentId === currentFolderId && f.dataRoomId === activeDataRoomId),
+    [folders, currentFolderId, activeDataRoomId]
+  );
+
+  const displayFiles = uploading ? frozenFilesRef.current : currentFiles;
+  const displayFolders = uploading ? frozenFoldersRef.current : currentFolders;
+  
   const existingNames = currentFiles.map((f) => f.name);
-  const isEmpty = currentFiles.length === 0 && currentFolders.length === 0;
+  const isEmpty = displayFiles.length === 0 && displayFolders.length === 0;
+  
+  const shouldShowEmpty = uploading 
+    ? (frozenContentRef.current === 'empty')
+    : isEmpty;
 
   const handleFileSelect = useCallback(
     async (fileList: FileList | null) => {
@@ -82,6 +99,10 @@ export const Layout = () => {
         return;
       }
 
+      const initialIsEmpty = currentFiles.length === 0 && currentFolders.length === 0;
+      frozenContentRef.current = initialIsEmpty ? 'empty' : 'files';
+      frozenFilesRef.current = [...currentFiles];
+      frozenFoldersRef.current = [...currentFolders];
       setUploading(true);
 
       const files = Array.from(fileList);
@@ -178,9 +199,14 @@ export const Layout = () => {
         });
       } finally {
         setUploading(false);
+        setTimeout(() => {
+          frozenContentRef.current = null;
+          frozenFilesRef.current = [];
+          frozenFoldersRef.current = [];
+        }, 100);
       }
     },
-    [activeDataRoomId, currentFolderId, existingNames, dispatch, toast]
+    [activeDataRoomId, currentFolderId, existingNames, currentFiles, currentFolders, dispatch, toast]
   );
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -241,7 +267,7 @@ export const Layout = () => {
         </aside>
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="border-b">
-              <div className="flex items-center justify-between p-5 h-[60px]">
+            <div className="flex items-center justify-between p-5 h-[60px]">
               <Breadcrumbs />
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -320,15 +346,28 @@ export const Layout = () => {
               <div
                 className={cn(
                   'flex-1 relative',
-                  isEmpty ? 'flex items-center justify-center' : 'overflow-auto',
-                  isDragging && 'bg-accent/50'
+                  shouldShowEmpty ? 'flex items-center justify-center' : 'overflow-auto',
+                  isDragging && !uploading && 'bg-accent/50',
+                  uploading && 'overflow-hidden'
                 )}
+                style={uploading ? { minHeight: '100%' } : undefined}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               >
-                {isDragging && isEmpty && (
+                {uploading && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-md border-2 border-dashed border-primary rounded-lg m-4">
+                    <div className="space-y-4 flex flex-col items-center justify-center space-y-4">
+                      <Spinner size="lg" />
+                      <p className="text-lg font-medium">Uploading files...</p>
+                      <p className="text-sm text-muted-foreground">
+                        Please wait while files are being uploaded
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {!uploading && isDragging && (
                   <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg m-4">
                     <div className="text-center space-y-4">
                       <Upload className="h-16 w-16 mx-auto text-primary" />
@@ -347,13 +386,16 @@ export const Layout = () => {
                       <p className="text-sm text-muted-foreground">Loading files and folders...</p>
                     </div>
                   </div>
-                ) : isEmpty ? (
+                ) : shouldShowEmpty ? (
                   <div className="w-full h-full p-4">
                     <FileUpload />
                   </div>
                 ) : (
                   <div className="p-4">
-                    <FileList />
+                    <FileList 
+                      frozenFiles={uploading ? frozenFilesRef.current : undefined}
+                      frozenFolders={uploading ? frozenFoldersRef.current : undefined}
+                    />
                   </div>
                 )}
               </div>

@@ -1,6 +1,5 @@
 import { useAppSelector } from '@/hooks/redux';
-import { setFolderInfoDialogOpen } from '@/store/uiSlice';
-import { useAppDispatch } from '@/hooks/redux';
+import { useDialog } from '@/contexts/DialogContext';
 import { formatFileSize, formatDate } from '@/lib/utils';
 import {
   Dialog,
@@ -12,8 +11,7 @@ import {
 import { Folder } from 'lucide-react';
 
 export const FolderInfoDialog = () => {
-  const dispatch = useAppDispatch();
-  const { isFolderInfoDialogOpen } = useAppSelector((state) => state.ui);
+  const { isFolderInfoDialogOpen, closeFolderInfoDialog } = useDialog();
   const { folders, currentFolderId } = useAppSelector((state) => state.folder);
   const { activeDataRoomId, dataRooms } = useAppSelector((state) => state.dataroom);
   const { files } = useAppSelector((state) => state.file);
@@ -40,7 +38,9 @@ export const FolderInfoDialog = () => {
   const displayDate = currentFolder ? currentFolder.updatedAt : currentDataRoom.updatedAt;
 
   return (
-    <Dialog open={isFolderInfoDialogOpen} onOpenChange={(open) => dispatch(setFolderInfoDialogOpen(open))}>
+    <Dialog open={isFolderInfoDialogOpen} onOpenChange={(open) => {
+      if (!open) closeFolderInfoDialog();
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

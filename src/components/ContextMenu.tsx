@@ -1,7 +1,8 @@
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import { Edit, Trash2 } from 'lucide-react';
 import { useAppDispatch } from '@/hooks/redux';
-import { setSelectedItem, setRenameDialogOpen, setDeleteItemDialogOpen } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -16,15 +17,16 @@ interface ContextMenuProps {
 
 export const ContextMenu = ({ type, id, children }: ContextMenuProps) => {
   const dispatch = useAppDispatch();
+  const { openRenameDialog, openDeleteItemDialog } = useDialog();
 
   const handleRename = () => {
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setRenameDialogOpen(true));
+    openRenameDialog();
   };
 
   const handleDelete = () => {
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setDeleteItemDialogOpen(true));
+    openDeleteItemDialog();
   };
 
   return (

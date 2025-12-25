@@ -1,6 +1,7 @@
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
 import { setViewingFile } from '@/store/fileSlice';
-import { setSelectedItem, setRenameDialogOpen, setItemInfoDialogOpen, setDeleteItemDialogOpen } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { setCurrentFolder } from '@/store/folderSlice';
 import { setSortBy, setSortDirection } from '@/store/settingsSlice';
 import { File as FileIcon, Folder as FolderIcon, MoreVertical, Trash2, Edit, Info, ArrowUp, ArrowDown, Download } from 'lucide-react';
@@ -32,6 +33,7 @@ interface FileListProps {
 
 export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => {
   const dispatch = useAppDispatch();
+  const { openRenameDialog, openDeleteItemDialog, openItemInfoDialog } = useDialog();
   const { files } = useAppSelector((state) => state.file);
   const { folders, currentFolderId } = useAppSelector((state) => state.folder);
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
@@ -40,8 +42,6 @@ export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => 
   const [hoveredItemType, setHoveredItemType] = useState<'file' | 'folder' | null>(null);
   const contextMenuClickedRef = useRef<string | null>(null);
 
-  // Используем замороженные данные, если они предоставлены (во время загрузки)
-  // Замороженные данные уже отфильтрованы, поэтому не фильтруем их снова
   const currentFiles = frozenFiles ?? files.filter(
     (f) => f.folderId === currentFolderId && f.dataRoomId === activeDataRoomId
   );
@@ -125,13 +125,13 @@ export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => 
   const handleRename = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setRenameDialogOpen(true));
+    openRenameDialog();
   };
 
   const handleDelete = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setDeleteItemDialogOpen(true));
+    openDeleteItemDialog();
   };
 
   const handleDownload = async (fileId: string, e: React.MouseEvent) => {
@@ -161,7 +161,7 @@ export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => 
   const handleInfo = (id: string, type: 'file' | 'folder', e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedItem({ type, id }));
-    dispatch(setItemInfoDialogOpen(true));
+    openItemInfoDialog();
   };
 
   if (!activeDataRoomId) {

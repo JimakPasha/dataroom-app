@@ -1,7 +1,8 @@
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { deleteFile } from '@/store/fileSlice';
 import { deleteFolder } from '@/store/folderSlice';
-import { setDeleteItemDialogOpen, setSelectedItem } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { useState } from 'react';
 import { Spinner } from '../ui/spinner';
 import {
@@ -18,7 +19,8 @@ import { AlertTriangle } from 'lucide-react';
 
 export const DeleteItemDialog = () => {
   const dispatch = useAppDispatch();
-  const { isDeleteItemDialogOpen, selectedItem } = useAppSelector((state) => state.ui);
+  const { isDeleteItemDialogOpen, closeDeleteItemDialog } = useDialog();
+  const { selectedItem } = useAppSelector((state) => state.ui);
   const { files } = useAppSelector((state) => state.file);
   const { folders } = useAppSelector((state) => state.folder);
   const { toast } = useToast();
@@ -50,7 +52,7 @@ export const DeleteItemDialog = () => {
           description: 'The folder and all its contents have been permanently deleted',
         });
       }
-      dispatch(setDeleteItemDialogOpen(false));
+      closeDeleteItemDialog();
       dispatch(setSelectedItem(null));
     } catch (error) {
       toast({
@@ -73,8 +75,8 @@ export const DeleteItemDialog = () => {
     <Dialog 
       open={isDeleteItemDialogOpen} 
       onOpenChange={(open) => {
-        dispatch(setDeleteItemDialogOpen(open));
         if (!open) {
+          closeDeleteItemDialog();
           dispatch(setSelectedItem(null));
         }
       }}
@@ -125,7 +127,7 @@ export const DeleteItemDialog = () => {
             type="button"
             variant="outline"
             onClick={() => {
-              dispatch(setDeleteItemDialogOpen(false));
+              closeDeleteItemDialog();
               dispatch(setSelectedItem(null));
             }}
             disabled={deleting}

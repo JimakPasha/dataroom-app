@@ -7,7 +7,7 @@ import { Button } from './ui/button';
 import { Plus, FolderPlus, Grid3x3, List, Upload, Info, ArrowLeft, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
-import { setCreateFolderDialogOpen, setFolderInfoDialogOpen, setSearchDialogOpen } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,7 @@ import type { FileType } from '@/types';
 export const Layout = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { openCreateFolderDialog, openFolderInfoDialog, openSearchDialog } = useDialog();
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
   const { currentFolderId, folders, loading: foldersLoading, error: foldersError } = useAppSelector((state) => state.folder);
   const { layoutMode } = useAppSelector((state) => state.settings);
@@ -295,7 +296,7 @@ export const Layout = () => {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => dispatch(setSearchDialogOpen(true))}
+                    onClick={openSearchDialog}
                     disabled={!activeDataRoomId}
                     title="Search files and folders"
                   >
@@ -318,7 +319,7 @@ export const Layout = () => {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => dispatch(setCreateFolderDialogOpen(true))}>
+                      <DropdownMenuItem onClick={openCreateFolderDialog}>
                         <FolderPlus className="h-4 w-4 mr-2" />
                         Create Folder
                       </DropdownMenuItem>
@@ -331,7 +332,7 @@ export const Layout = () => {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => dispatch(setFolderInfoDialogOpen(true))}
+                    onClick={openFolderInfoDialog}
                     disabled={!activeDataRoomId}
                     title="Folder Information"
                   >
@@ -401,7 +402,7 @@ export const Layout = () => {
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent>
-              <ContextMenuItem onClick={() => dispatch(setCreateFolderDialogOpen(true))}>
+              <ContextMenuItem onClick={openCreateFolderDialog}>
                 <FolderPlus className="h-4 w-4 mr-2" />
                 Create Folder
               </ContextMenuItem>
@@ -409,7 +410,7 @@ export const Layout = () => {
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Files
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => dispatch(setFolderInfoDialogOpen(true))}>
+              <ContextMenuItem onClick={openFolderInfoDialog}>
                 <Info className="h-4 w-4 mr-2" />
                 Folder Information
               </ContextMenuItem>

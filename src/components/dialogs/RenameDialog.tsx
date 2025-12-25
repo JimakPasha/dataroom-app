@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { updateFolder } from '@/store/folderSlice';
 import { updateFile } from '@/store/fileSlice';
-import { setRenameDialogOpen, setSelectedItem } from '@/store/uiSlice';
+import { setSelectedItem } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName, validateFileName } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import {
@@ -20,7 +21,8 @@ import { Spinner } from '../ui/spinner';
 
 export const RenameDialog = () => {
   const dispatch = useAppDispatch();
-  const { isRenameDialogOpen, selectedItem } = useAppSelector((state) => state.ui);
+  const { isRenameDialogOpen, closeRenameDialog } = useDialog();
+  const { selectedItem } = useAppSelector((state) => state.ui);
   const { folders } = useAppSelector((state) => state.folder);
   const { files } = useAppSelector((state) => state.file);
   const { toast } = useToast();
@@ -68,7 +70,7 @@ export const RenameDialog = () => {
       setLoading(true);
       try {
         await dispatch(updateFolder({ ...folder, name: uniqueName })).unwrap();
-        dispatch(setRenameDialogOpen(false));
+        closeRenameDialog();
         dispatch(setSelectedItem(null));
         toast({
           title: 'Folder renamed',
@@ -103,7 +105,7 @@ export const RenameDialog = () => {
       setLoading(true);
       try {
         await dispatch(updateFile({ ...file, name: uniqueName })).unwrap();
-        dispatch(setRenameDialogOpen(false));
+        closeRenameDialog();
         dispatch(setSelectedItem(null));
         toast({
           title: 'File renamed',
@@ -125,8 +127,8 @@ export const RenameDialog = () => {
     <Dialog 
       open={isRenameDialogOpen} 
       onOpenChange={(open) => {
-        dispatch(setRenameDialogOpen(open));
         if (!open) {
+          closeRenameDialog();
           dispatch(setSelectedItem(null));
         }
       }}
@@ -151,7 +153,7 @@ export const RenameDialog = () => {
               type="button"
               variant="outline"
               onClick={() => {
-                dispatch(setRenameDialogOpen(false));
+                closeRenameDialog();
                 dispatch(setSelectedItem(null));
               }}
               disabled={loading}

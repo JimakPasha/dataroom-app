@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { fetchDataRooms } from '@/store/dataroomSlice';
-import { setCreateDataRoomDialogOpen, setRenameDataRoomDialogOpen, setDeleteDataRoomDialogOpen, setSelectedDataRoomId } from '@/store/uiSlice';
+import { setSelectedDataRoomId } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { setLayoutMode, setSortBy, setSortDirection } from '@/store/settingsSlice';
 import { Button } from '@/components/ui/button';
 import { Plus, Database, MoreVertical, Trash2, Edit, Grid3x3, List, ArrowUp, ArrowDown } from 'lucide-react';
@@ -32,6 +33,7 @@ import { shouldLoadMocks, generateMockData } from '@/lib/mockData';
 export const HomePage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { openCreateDataRoomDialog, openRenameDataRoomDialog, openDeleteDataRoomDialog } = useDialog();
   const { dataRooms, loading } = useAppSelector((state) => state.dataroom);
   const { layoutMode, sortBy, sortDirection } = useAppSelector((state) => state.settings);
   const [hoveredRoomId, setHoveredRoomId] = useState<string | null>(null);
@@ -82,13 +84,13 @@ export const HomePage = () => {
   const handleRename = (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedDataRoomId(roomId));
-    dispatch(setRenameDataRoomDialogOpen(true));
+    openRenameDataRoomDialog();
   };
 
   const handleDelete = (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     dispatch(setSelectedDataRoomId(roomId));
-    dispatch(setDeleteDataRoomDialogOpen(true));
+    openDeleteDataRoomDialog();
   };
 
   const handleSortClick = (field: 'name' | 'dateModified') => {
@@ -302,7 +304,7 @@ export const HomePage = () => {
                 <div className="h-6 w-px bg-border" />
               </>
             )}
-            <Button onClick={() => dispatch(setCreateDataRoomDialogOpen(true))}>
+            <Button onClick={openCreateDataRoomDialog}>
               <Plus className="h-4 w-4 mr-2" />
               Create Room
             </Button>
@@ -314,7 +316,7 @@ export const HomePage = () => {
             <Database className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
             <h2 className="text-2xl font-semibold mb-2">No rooms yet</h2>
             <p className="text-muted-foreground mb-6">Create your first data room to get started</p>
-            <Button onClick={() => dispatch(setCreateDataRoomDialogOpen(true))}>
+            <Button onClick={openCreateDataRoomDialog}>
               <Plus className="h-4 w-4 mr-2" />
               Create Room
             </Button>

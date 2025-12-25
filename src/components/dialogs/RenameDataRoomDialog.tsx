@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { updateDataRoom } from '@/store/dataroomSlice';
-import { setRenameDataRoomDialogOpen, setSelectedDataRoomId } from '@/store/uiSlice';
+import { setSelectedDataRoomId } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import {
@@ -19,7 +20,8 @@ import { Spinner } from '../ui/spinner';
 
 export const RenameDataRoomDialog = () => {
   const dispatch = useAppDispatch();
-  const { isRenameDataRoomDialogOpen, selectedDataRoomId } = useAppSelector((state) => state.ui);
+  const { isRenameDataRoomDialogOpen, closeRenameDataRoomDialog } = useDialog();
+  const { selectedDataRoomId } = useAppSelector((state) => state.ui);
   const { dataRooms } = useAppSelector((state) => state.dataroom);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export const RenameDataRoomDialog = () => {
     setLoading(true);
     try {
       await dispatch(updateDataRoom({ ...dataRoom, name: uniqueName })).unwrap();
-      dispatch(setRenameDataRoomDialogOpen(false));
+      closeRenameDataRoomDialog();
       dispatch(setSelectedDataRoomId(null));
       toast({
         title: 'Data room renamed',
@@ -81,8 +83,8 @@ export const RenameDataRoomDialog = () => {
     <Dialog 
       open={isRenameDataRoomDialogOpen} 
       onOpenChange={(open) => {
-        dispatch(setRenameDataRoomDialogOpen(open));
         if (!open) {
+          closeRenameDataRoomDialog();
           dispatch(setSelectedDataRoomId(null));
         }
       }}
@@ -107,7 +109,7 @@ export const RenameDataRoomDialog = () => {
               type="button"
               variant="outline"
               onClick={() => {
-                dispatch(setRenameDataRoomDialogOpen(false));
+                closeRenameDataRoomDialog();
                 dispatch(setSelectedDataRoomId(null));
               }}
               disabled={loading}

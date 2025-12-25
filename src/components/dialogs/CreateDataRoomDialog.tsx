@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { createDataRoom, setActiveDataRoom } from '@/store/dataroomSlice';
-import { setCreateDataRoomDialogOpen } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFolderName } from '@/lib/validators';
 import { sanitizeFileName, generateUniqueName } from '@/lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -22,7 +22,7 @@ export const CreateDataRoomDialog = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { isCreateDataRoomDialogOpen } = useAppSelector((state) => state.ui);
+  const { isCreateDataRoomDialogOpen, closeCreateDataRoomDialog } = useDialog();
   const { dataRooms } = useAppSelector((state) => state.dataroom);
   const { toast } = useToast();
   const [name, setName] = useState('');
@@ -50,7 +50,7 @@ export const CreateDataRoomDialog = () => {
     try {
       const result = await dispatch(createDataRoom(uniqueName)).unwrap();
       dispatch(setActiveDataRoom(result.id));
-      dispatch(setCreateDataRoomDialogOpen(false));
+      closeCreateDataRoomDialog();
       setName('');
       toast({
         title: 'Data room created',
@@ -71,7 +71,9 @@ export const CreateDataRoomDialog = () => {
   };
 
   return (
-    <Dialog open={isCreateDataRoomDialogOpen} onOpenChange={(open) => dispatch(setCreateDataRoomDialogOpen(open))}>
+    <Dialog open={isCreateDataRoomDialogOpen} onOpenChange={(open) => {
+      if (!open) closeCreateDataRoomDialog();
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create Data Room</DialogTitle>
@@ -91,7 +93,7 @@ export const CreateDataRoomDialog = () => {
             <Button
               type="button"
               variant="outline"
-              onClick={() => dispatch(setCreateDataRoomDialogOpen(false))}
+              onClick={closeCreateDataRoomDialog}
               disabled={loading}
             >
               Cancel

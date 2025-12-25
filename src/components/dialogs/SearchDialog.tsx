@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
-import { setSearchDialogOpen } from '@/store/uiSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { setCurrentFolder } from '@/store/folderSlice';
 import { setViewingFile } from '@/store/fileSlice';
 import { buildFolderPath, buildFilePath, formatPath, getFileIcon } from '@/lib/utils';
@@ -27,7 +27,7 @@ interface SearchResult {
 
 export const SearchDialog = () => {
   const dispatch = useAppDispatch();
-  const { isSearchDialogOpen } = useAppSelector((state) => state.ui);
+  const { isSearchDialogOpen, openSearchDialog, closeSearchDialog } = useDialog();
   const { folders } = useAppSelector((state) => state.folder);
   const { files } = useAppSelector((state) => state.file);
   const { activeDataRoomId, dataRooms } = useAppSelector((state) => state.dataroom);
@@ -83,13 +83,13 @@ export const SearchDialog = () => {
 
   const handleNavigateToFolder = (folderId: string) => {
     dispatch(setCurrentFolder(folderId));
-    dispatch(setSearchDialogOpen(false));
+    closeSearchDialog();
     setSearchQuery('');
   };
 
   const handleOpenFile = (fileId: string) => {
     dispatch(setViewingFile(fileId));
-    dispatch(setSearchDialogOpen(false));
+    closeSearchDialog();
     setSearchQuery('');
   };
 
@@ -99,13 +99,13 @@ export const SearchDialog = () => {
       handleNavigateToFolder(lastFolderId);
     } else {
       dispatch(setCurrentFolder(null));
-      dispatch(setSearchDialogOpen(false));
+      closeSearchDialog();
       setSearchQuery('');
     }
   };
 
   const handleClose = () => {
-    dispatch(setSearchDialogOpen(false));
+    closeSearchDialog();
     setSearchQuery('');
   };
 
@@ -114,21 +114,23 @@ export const SearchDialog = () => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         if (!isSearchDialogOpen) {
-          dispatch(setSearchDialogOpen(true));
+          openSearchDialog();
         }
       }
       if (e.key === 'Escape' && isSearchDialogOpen) {
-        dispatch(setSearchDialogOpen(false));
+        closeSearchDialog();
         setSearchQuery('');
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSearchDialogOpen, dispatch]);
+  }, [isSearchDialogOpen, openSearchDialog, closeSearchDialog]);
 
   return (
-    <Dialog open={isSearchDialogOpen} onOpenChange={handleClose}>
+    <Dialog open={isSearchDialogOpen} onOpenChange={(open) => {
+      if (!open) handleClose();
+    }}>
       <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Search Files and Folders</DialogTitle>

@@ -1,17 +1,18 @@
 import { useRef, useState, useCallback } from 'react';
 import { useAppSelector, useAppDispatch } from '@/hooks/redux';
 import { createFile } from '@/store/fileSlice';
+import { useDialog } from '@/contexts/DialogContext';
 import { validateFileType, validateFileSize } from '@/lib/validators';
 import { generateUniqueName, sanitizeFileName } from '@/lib/utils';
 import { Upload, FolderPlus } from 'lucide-react';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { setCreateFolderDialogOpen } from '@/store/uiSlice';
 import type { FileType } from '@/types';
 
 export const FileUpload = () => {
   const dispatch = useAppDispatch();
+  const { openCreateFolderDialog } = useDialog();
   const { currentFolderId } = useAppSelector((state) => state.folder);
   const { activeDataRoomId } = useAppSelector((state) => state.dataroom);
   const { files } = useAppSelector((state) => state.file);
@@ -178,7 +179,7 @@ export const FileUpload = () => {
         <span className="text-sm text-muted-foreground hidden sm:inline">or</span>
         <Button
           variant="outline"
-          onClick={() => dispatch(setCreateFolderDialogOpen(true))}
+          onClick={openCreateFolderDialog}
           disabled={uploading}
           className="w-full sm:w-auto"
         >

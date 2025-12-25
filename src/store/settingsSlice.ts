@@ -30,7 +30,6 @@ const saveSettingsToStorage = (settings: SettingsState) => {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
-    // eslint-disable-next-line no-console
     console.error('Error saving settings to storage:', error);
   }
 };

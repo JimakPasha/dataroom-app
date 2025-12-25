@@ -153,8 +153,7 @@ export const FileList = ({ frozenFiles, frozenFolders }: FileListProps = {}) => 
         URL.revokeObjectURL(url);
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(error);
+      console.error('Failed to download file:', error);
     }
   };
 

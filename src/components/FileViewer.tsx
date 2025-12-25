@@ -22,11 +22,6 @@ export const FileViewer = () => {
 
   useEffect(() => {
     if (!file) {
-      setContent(null);
-      setError(null);
-      setExcelWorkbook(null);
-      setExcelSheetNames([]);
-      setCurrentSheetIndex(0);
       return;
     }
 
@@ -36,6 +31,9 @@ export const FileViewer = () => {
       setLoading(true);
       setError(null);
       setContent(null);
+      setExcelWorkbook(null);
+      setExcelSheetNames([]);
+      setCurrentSheetIndex(0);
 
       try {
         const fileData = await mockApiCall(

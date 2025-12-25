@@ -13,7 +13,6 @@ export const PDFViewer = () => {
 
   useEffect(() => {
     if (!file) {
-      setPdfUrl(null);
       return;
     }
 

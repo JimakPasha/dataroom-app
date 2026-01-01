@@ -144,18 +144,15 @@ const fileSlice = createSlice({
         state.error = action.error.message || 'Failed to update file';
       })
       .addCase(deleteFile.pending, (state) => {
-        state.loading = true;
         state.error = null;
       })
       .addCase(deleteFile.fulfilled, (state, action) => {
-        state.loading = false;
         state.files = state.files.filter((f) => f.id !== action.payload);
         if (state.viewingFileId === action.payload) {
           state.viewingFileId = null;
         }
       })
       .addCase(deleteFile.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.error.message || 'Failed to delete file';
       });
   },

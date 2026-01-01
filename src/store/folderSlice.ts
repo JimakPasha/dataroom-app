@@ -141,11 +141,9 @@ const folderSlice = createSlice({
         state.error = action.error.message || 'Failed to update folder';
       })
       .addCase(deleteFolder.pending, (state) => {
-        state.loading = true;
         state.error = null;
       })
       .addCase(deleteFolder.fulfilled, (state, action) => {
-        state.loading = false;
         const deleteRecursive = (folderId: string) => {
           state.folders = state.folders.filter((f) => f.id !== folderId);
           const children = state.folders.filter((f) => f.parentId === folderId);
@@ -157,7 +155,6 @@ const folderSlice = createSlice({
         }
       })
       .addCase(deleteFolder.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.error.message || 'Failed to delete folder';
       });
   },

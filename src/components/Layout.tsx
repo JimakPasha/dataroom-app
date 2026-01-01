@@ -380,7 +380,7 @@ export const Layout = () => {
                     </div>
                   </div>
                 )}
-                {foldersLoading || filesLoading ? (
+                {(foldersLoading || filesLoading) && files.length === 0 && folders.length === 0 ? (
                   <div className="flex items-center justify-center h-full w-full">
                     <div className="flex flex-col items-center gap-3">
                       <Spinner size="lg" />

@@ -110,3 +110,145 @@ export const formatPath = (path: PathItem[], dataRoomName: string): string => {
   return `${dataRoomName} / ${path.map((p) => p.name).join(' / ')}`;
 };
 
+interface FileSystemFileEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  fullPath: string;
+  file(callback: (file: File) => void): void;
+}
+
+interface FileSystemDirectoryEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+  fullPath: string;
+  createReader(): FileSystemDirectoryReader;
+}
+
+interface FileSystemDirectoryReader {
+  readEntries(callback: (entries: (FileSystemFileEntry | FileSystemDirectoryEntry)[]) => void): void;
+}
+
+type DataTransferItemWithFileSystem = DataTransferItem & {
+  webkitGetAsEntry?: () => FileSystemFileEntry | FileSystemDirectoryEntry | null;
+  getAsFileSystemHandle?: () => FileSystemFileEntry | FileSystemDirectoryEntry | null;
+}
+
+export interface ProcessedFile {
+  file: File;
+  relativePath: string;
+  folderPath: string[];
+}
+
+export interface ProcessedFolder {
+  name: string;
+  folderPath: string[];
+}
+
+export const processDirectoryEntry = async (
+  entry: FileSystemDirectoryEntry,
+  basePath: string[] = []
+): Promise<{ files: ProcessedFile[]; folders: ProcessedFolder[] }> => {
+  const files: ProcessedFile[] = [];
+  const folders: ProcessedFolder[] = [];
+  const currentPath = [...basePath, entry.name];
+
+  folders.push({
+    name: entry.name,
+    folderPath: basePath,
+  });
+
+  return new Promise((resolve, reject) => {
+    const reader = entry.createReader();
+    const entries: (FileSystemFileEntry | FileSystemDirectoryEntry)[] = [];
+
+    const readEntries = () => {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          Promise.all(
+            entries.map(async (entry) => {
+              if (entry.isDirectory) {
+                const result = await processDirectoryEntry(entry as FileSystemDirectoryEntry, currentPath);
+                folders.push(...result.folders);
+                files.push(...result.files);
+              } else if (entry.isFile) {
+                return new Promise<void>((resolveFile) => {
+                  (entry as FileSystemFileEntry).file((file) => {
+                    files.push({
+                      file,
+                      relativePath: entry.fullPath,
+                      folderPath: currentPath,
+                    });
+                    resolveFile();
+                  });
+                });
+              }
+            })
+          )
+            .then(() => {
+              resolve({ files, folders });
+            })
+            .catch(reject);
+        } else {
+          entries.push(...batch);
+          readEntries();
+        }
+      });
+    };
+
+    readEntries();
+  });
+};
+
+export const processDataTransferItems = async (
+  items: DataTransferItemList
+): Promise<{ files: ProcessedFile[]; folders: ProcessedFolder[]; plainFiles: File[] }> => {
+  const processedFiles: ProcessedFile[] = [];
+  const processedFolders: ProcessedFolder[] = [];
+  const plainFiles: File[] = [];
+
+  const processPromises: Promise<void>[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] as DataTransferItemWithFileSystem;
+
+    if (item.kind === 'file') {
+      const entry = item.webkitGetAsEntry?.() || item.getAsFileSystemHandle?.();
+
+      if (entry) {
+        if (entry.isDirectory) {
+          processPromises.push(
+            processDirectoryEntry(entry as FileSystemDirectoryEntry).then((result) => {
+              processedFiles.push(...result.files);
+              processedFolders.push(...result.folders);
+            })
+          );
+        } else if (entry.isFile) {
+          processPromises.push(
+            new Promise<void>((resolve) => {
+              (entry as FileSystemFileEntry).file((file) => {
+                plainFiles.push(file);
+                resolve();
+              });
+            })
+          );
+        }
+      } else {
+        const file = item.getAsFile();
+        if (file) {
+          plainFiles.push(file);
+        }
+      }
+    }
+  }
+
+  await Promise.all(processPromises);
+
+  return {
+    files: processedFiles,
+    folders: processedFolders,
+    plainFiles,
+  };
+};
+

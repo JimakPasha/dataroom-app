@@ -272,7 +272,10 @@ export const AboutPage = () => {
                     </h3>
                     <ul className="space-y-2 list-disc list-inside ml-2">
                       <li>File upload via drag & drop or file picker dialog</li>
+                      <li>Folder upload with complete structure preservation</li>
                       <li>Support for multiple simultaneous file uploads</li>
+                      <li>Recursive folder processing (nested folders supported)</li>
+                      <li>Empty folder upload support (Chrome/Edge via File System Access API)</li>
                       <li>Formats: PDF, Word (.docx), Excel (.xls, .xlsx), TXT, CSV</li>
                       <li>Built-in PDF viewer in modal window</li>
                       <li>Word document viewing with HTML conversion</li>
@@ -284,6 +287,7 @@ export const AboutPage = () => {
                       <li>Automatic name conflict resolution (adding suffixes)</li>
                       <li>File size validation (maximum 10MB)</li>
                       <li>File name sanitization (removing invalid characters)</li>
+                      <li>Folder structure validation and automatic creation</li>
                     </ul>
                   </div>
 
@@ -858,6 +862,16 @@ export const AboutPage = () => {
                         <p>
                           <strong className="text-foreground">File Upload:</strong> File API is used to read files into ArrayBuffer, 
                           which is then saved to IndexedDB. Support for multiple uploads with error handling for each file separately.
+                        </p>
+                        <p>
+                          <strong className="text-foreground">Folder Upload:</strong> Two methods are supported for folder uploads:
+                        </p>
+                        <ul className="list-disc list-inside ml-4 space-y-1">
+                          <li><strong className="text-foreground">File System Access API</strong> (Chrome/Edge): Uses <code className="bg-muted px-1 rounded">showDirectoryPicker()</code> to recursively process folders, including empty folders. Recursively traverses directory structure and processes all files and subfolders.</li>
+                          <li><strong className="text-foreground">webkitdirectory</strong> (Firefox/Safari): Uses HTML5 directory input attribute to select folders. Processes <code className="bg-muted px-1 rounded">webkitRelativePath</code> to reconstruct folder hierarchy. Empty folders require at least one file.</li>
+                        </ul>
+                        <p>
+                          <strong className="text-foreground">Drag & Drop Folders:</strong> Uses <code className="bg-muted px-1 rounded">DataTransfer.items</code> with <code className="bg-muted px-1 rounded">webkitGetAsEntry()</code> to detect and process folder drops. Recursively processes <code className="bg-muted px-1 rounded">FileSystemDirectoryEntry</code> to extract all files and folders.
                         </p>
                         <p>
                           <strong className="text-foreground">PDF Viewing:</strong> Blob URL is created from ArrayBuffer, which is then 

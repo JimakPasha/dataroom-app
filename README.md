@@ -56,6 +56,7 @@ npm run preview
   - Navigate through folder hierarchy
 - **File Management**:
   - Upload PDF, DOCX, XLSX, TXT, and CSV files (drag & drop supported)
+  - Upload entire folders with all contents (including nested folders)
   - View files in a built-in viewer
   - Rename files
   - Delete files
@@ -167,6 +168,22 @@ dataroom-app/
 4. Supported file types: PDF, DOCX, XLSX, TXT, CSV
 5. Maximum file size: 10MB
 6. Files with duplicate names are automatically renamed (e.g., "document.pdf" → "document (1).pdf")
+
+### Uploading Folders
+
+1. Navigate to the folder where you want to upload a folder
+2. **Drag and drop** a folder onto the upload area, OR
+3. Click **"Upload Folder"** from the menu (➕ button or context menu), OR
+4. Click **"Select Folder"** in the empty state area
+5. Select a folder from your computer
+6. The entire folder structure will be recreated, including:
+   - All nested subfolders
+   - All files within the folder and subfolders
+7. **Browser Support**:
+   - **Chrome/Edge**: Full support for folders (including empty folders) via File System Access API
+   - **Firefox/Safari**: Support for folders with files via webkitdirectory (empty folders require adding at least one file)
+8. All files are validated (type and size) before upload
+9. Folder and file names are automatically sanitized and made unique if duplicates exist
 
 ### Viewing Files
 
@@ -476,11 +493,11 @@ npm run format
 
 ## Browser Support
 
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
+- **Chrome/Edge (latest)**: Full support including folder uploads (empty and with content) via File System Access API
+- **Firefox (latest)**: Full support including folder uploads via webkitdirectory (empty folders require at least one file)
+- **Safari (latest)**: Full support including folder uploads via webkitdirectory (empty folders require at least one file)
 
-Note: IndexedDB is required, so very old browsers may not be supported.
+Note: IndexedDB is required, so very old browsers may not be supported. File System Access API (for advanced folder upload features) is only available in Chrome/Edge.
 
 ## Future Enhancements
 

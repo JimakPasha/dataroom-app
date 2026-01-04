@@ -105,7 +105,9 @@ export const AboutTab = () => {
             <ul className="space-y-2 text-muted-foreground list-disc list-inside">
               <li>Create and manage multiple data rooms</li>
               <li>Organize documents in nested folder structures</li>
-              <li>Upload and view PDF files</li>
+              <li>Upload individual files or entire folders</li>
+              <li>Upload folders with nested structure preserved</li>
+              <li>View PDF, Word, Excel, TXT, and CSV files</li>
               <li>Rename and delete folders and files</li>
               <li>Grid and list view modes</li>
               <li>Sorting and filtering capabilities</li>

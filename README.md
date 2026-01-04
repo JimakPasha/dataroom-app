@@ -211,7 +211,7 @@ dataroom-app/
 4. Confirm the deletion in the dialog
 5. **Important**: Deleting a folder will also delete ALL nested folders and files inside it (cascading deletion)
 
-## 🎨 Design Decisions
+## Design Decisions
 
 This section explains the key architectural and design decisions made during development, along with the reasoning behind each choice.
 

@@ -4,7 +4,7 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { FileUpload } from './FileUpload';
 import { SortMenu } from './SortMenu';
 import { Button } from './ui/button';
-import { Plus, FolderPlus, Grid3x3, List, Upload, Info, ArrowLeft, Search } from 'lucide-react';
+import { Plus, FolderPlus, Grid3x3, List, Upload, Info, ArrowLeft, Search, Folder } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/hooks/redux';
 import { useDialog } from '@/contexts/DialogContext';
@@ -23,11 +23,11 @@ import {
 import { TooltipProvider } from './ui/tooltip';
 import { setLayoutMode } from '@/store/settingsSlice';
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { fetchFolders } from '@/store/folderSlice';
+import { fetchFolders, createFolder } from '@/store/folderSlice';
 import { fetchFiles, createFile } from '@/store/fileSlice';
 import { Spinner } from './ui/spinner';
 import { validateFileType, validateFileSize } from '@/lib/validators';
-import { generateUniqueName, sanitizeFileName, cn } from '@/lib/utils';
+import { generateUniqueName, sanitizeFileName, cn, processDataTransferItems } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type { FileType } from '@/types';
 
@@ -44,6 +44,7 @@ export const Layout = () => {
   const [uploading, setUploading] = useState(false);
   const dragCounterRef = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const frozenContentRef = useRef<'empty' | 'files' | null>(null);
   const frozenFilesRef = useRef<typeof files>([]);
   const frozenFoldersRef = useRef<typeof folders>([]);
@@ -88,11 +89,248 @@ export const Layout = () => {
   const displayFolders = uploading ? frozenFoldersRef.current : currentFolders;
   
   const existingNames = currentFiles.map((f) => f.name);
+  const existingFolderNames = currentFolders.map((f) => f.name);
   const isEmpty = displayFiles.length === 0 && displayFolders.length === 0;
   
   const shouldShowEmpty = uploading 
     ? (frozenContentRef.current === 'empty')
     : isEmpty;
+
+  const getFileType = (file: File): FileType => {
+    if (!file.type || file.type === 'application/octet-stream') {
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.pdf')) {
+        return 'application/pdf';
+      } else if (fileName.endsWith('.docx')) {
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (fileName.endsWith('.xlsx')) {
+        return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      } else if (fileName.endsWith('.xls')) {
+        return 'application/vnd.ms-excel';
+      } else if (fileName.endsWith('.txt')) {
+        return 'text/plain';
+      } else if (fileName.endsWith('.csv')) {
+        return 'text/csv';
+      } else {
+        return 'application/pdf';
+      }
+    } else {
+      return file.type as FileType;
+    }
+  };
+
+  const handleFolderAndFileUpload = useCallback(
+    async (processedData: { files: Array<{ file: File; relativePath: string; folderPath: string[] }>; folders: Array<{ name: string; folderPath: string[] }>; plainFiles: File[] }) => {
+      if (!activeDataRoomId) {
+        return;
+      }
+
+      const createFolderStructure = async (
+        folders: Array<{ name: string; folderPath: string[] }>,
+        baseFolderId: string | null,
+        existingFolderNames: string[]
+      ): Promise<Map<string, string>> => {
+        const folderMap = new Map<string, string>();
+        const updatedFolderNames = [...existingFolderNames];
+
+        const sortedFolders = [...folders].sort((a, b) => a.folderPath.length - b.folderPath.length);
+
+        for (const folderInfo of sortedFolders) {
+          const parentPath = folderInfo.folderPath.join('/');
+          const parentId = folderMap.get(parentPath) || baseFolderId;
+
+          const sanitizedName = sanitizeFileName(folderInfo.name);
+          const uniqueName = generateUniqueName(sanitizedName, updatedFolderNames);
+          updatedFolderNames.push(uniqueName);
+
+          try {
+            const newFolder = await dispatch(
+              createFolder({
+                name: uniqueName,
+                parentId: parentId,
+                dataRoomId: activeDataRoomId,
+              })
+            ).unwrap();
+
+            const currentPath = folderInfo.folderPath.length > 0 
+              ? `${parentPath}/${folderInfo.name}`
+              : folderInfo.name;
+            folderMap.set(currentPath, newFolder.id);
+          } catch (error) {
+            console.error(`Failed to create folder ${folderInfo.name}:`, error);
+          }
+        }
+
+        return folderMap;
+      };
+
+      const initialIsEmpty = currentFiles.length === 0 && currentFolders.length === 0;
+      frozenContentRef.current = initialIsEmpty ? 'empty' : 'files';
+      frozenFilesRef.current = [...currentFiles];
+      frozenFoldersRef.current = [...currentFolders];
+      setUploading(true);
+
+      const results = { filesSuccess: 0, filesFailed: 0, foldersSuccess: 0, foldersFailed: 0 };
+      const updatedFileNames = [...existingNames];
+      const updatedFolderNames = [...existingFolderNames];
+
+      try {
+        if (processedData.folders.length > 0) {
+          const folderMap = await createFolderStructure(
+            processedData.folders,
+            currentFolderId,
+            updatedFolderNames
+          );
+
+          for (const fileInfo of processedData.files) {
+            try {
+              const file = fileInfo.file;
+
+              const typeValidation = validateFileType(file);
+              if (!typeValidation.valid) {
+                toast({
+                  title: 'Upload failed',
+                  description: `${file.name}: ${typeValidation.error}`,
+                  variant: 'destructive',
+                });
+                results.filesFailed++;
+                continue;
+              }
+
+              const sizeValidation = validateFileSize(file, 10);
+              if (!sizeValidation.valid) {
+                toast({
+                  title: 'Upload failed',
+                  description: `${file.name}: ${sizeValidation.error}`,
+                  variant: 'destructive',
+                });
+                results.filesFailed++;
+                continue;
+              }
+
+              const targetFolderPath = fileInfo.folderPath.join('/');
+              const targetFolderId = folderMap.get(targetFolderPath) || currentFolderId;
+
+              const sanitizedName = sanitizeFileName(file.name);
+              const uniqueName = generateUniqueName(sanitizedName, updatedFileNames);
+              updatedFileNames.push(uniqueName);
+
+              const arrayBuffer = await file.arrayBuffer();
+              const fileType = getFileType(file);
+
+              await dispatch(
+                createFile({
+                  name: uniqueName,
+                  folderId: targetFolderId,
+                  dataRoomId: activeDataRoomId,
+                  type: fileType,
+                  size: file.size,
+                  content: arrayBuffer,
+                })
+              ).unwrap();
+
+              results.filesSuccess++;
+            } catch (error) {
+              results.filesFailed++;
+              const errorMessage = error instanceof Error ? error.message : 'An error occurred while uploading';
+              toast({
+                title: 'Upload failed',
+                description: `${fileInfo.file.name}: ${errorMessage}`,
+                variant: 'destructive',
+              });
+            }
+          }
+        }
+
+        for (const file of processedData.plainFiles) {
+          try {
+            const typeValidation = validateFileType(file);
+            if (!typeValidation.valid) {
+              toast({
+                title: 'Upload failed',
+                description: `${file.name}: ${typeValidation.error}`,
+                variant: 'destructive',
+              });
+              results.filesFailed++;
+              continue;
+            }
+
+            const sizeValidation = validateFileSize(file, 10);
+            if (!sizeValidation.valid) {
+              toast({
+                title: 'Upload failed',
+                description: `${file.name}: ${sizeValidation.error}`,
+                variant: 'destructive',
+              });
+              results.filesFailed++;
+              continue;
+            }
+
+            const sanitizedName = sanitizeFileName(file.name);
+            const uniqueName = generateUniqueName(sanitizedName, updatedFileNames);
+            updatedFileNames.push(uniqueName);
+
+            const arrayBuffer = await file.arrayBuffer();
+            const fileType = getFileType(file);
+
+            await dispatch(
+              createFile({
+                name: uniqueName,
+                folderId: currentFolderId,
+                dataRoomId: activeDataRoomId,
+                type: fileType,
+                size: file.size,
+                content: arrayBuffer,
+              })
+            ).unwrap();
+
+            results.filesSuccess++;
+          } catch (error) {
+            results.filesFailed++;
+            const errorMessage = error instanceof Error ? error.message : 'An error occurred while uploading';
+            toast({
+              title: 'Upload failed',
+              description: `${file.name}: ${errorMessage}`,
+              variant: 'destructive',
+            });
+          }
+        }
+
+        const parts: string[] = [];
+        if (results.filesSuccess > 0) {
+          parts.push(`${results.filesSuccess} file${results.filesSuccess > 1 ? 's' : ''} uploaded`);
+        }
+        if (processedData.folders.length > 0) {
+          parts.push(`${processedData.folders.length} folder${processedData.folders.length > 1 ? 's' : ''} created`);
+        }
+        if (results.filesFailed > 0 || results.foldersFailed > 0) {
+          const failedCount = results.filesFailed + results.foldersFailed;
+          parts.push(`${failedCount} failed`);
+        }
+
+        if (parts.length > 0) {
+          toast({
+            title: 'Upload complete',
+            description: parts.join(', '),
+          });
+        }
+      } catch (error) {
+        toast({
+          title: 'Upload failed',
+          description: 'An error occurred while uploading',
+          variant: 'destructive',
+        });
+      } finally {
+        setUploading(false);
+        setTimeout(() => {
+          frozenContentRef.current = null;
+          frozenFilesRef.current = [];
+          frozenFoldersRef.current = [];
+        }, 100);
+      }
+    },
+    [activeDataRoomId, currentFolderId, existingNames, existingFolderNames, currentFiles, currentFolders, dispatch, toast]
+  );
 
   const handleFileSelect = useCallback(
     async (fileList: FileList | null) => {
@@ -140,28 +378,7 @@ export const Layout = () => {
             updatedNames.push(uniqueName);
 
             const arrayBuffer = await file.arrayBuffer();
-
-            let fileType: FileType;
-            if (!file.type || file.type === 'application/octet-stream') {
-              const fileName = file.name.toLowerCase();
-              if (fileName.endsWith('.pdf')) {
-                fileType = 'application/pdf';
-              } else if (fileName.endsWith('.docx')) {
-                fileType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-              } else if (fileName.endsWith('.xlsx')) {
-                fileType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-              } else if (fileName.endsWith('.xls')) {
-                fileType = 'application/vnd.ms-excel';
-              } else if (fileName.endsWith('.txt')) {
-                fileType = 'text/plain';
-              } else if (fileName.endsWith('.csv')) {
-                fileType = 'text/csv';
-              } else {
-                fileType = 'application/pdf';
-              }
-            } else {
-              fileType = file.type as FileType;
-            }
+            const fileType = getFileType(file);
 
             await dispatch(
               createFile({
@@ -233,15 +450,472 @@ export const Layout = () => {
     e.stopPropagation();
   }, []);
 
+  const handleFolderSelectClick = useCallback(async () => {
+    if (!activeDataRoomId) {
+      return;
+    }
+
+    interface WindowWithDirectoryPicker extends Window {
+      showDirectoryPicker?: () => Promise<{ name: string; kind: string; values: () => AsyncIterableIterator<{ name: string; kind: string }> }>;
+    }
+    const windowWithPicker = window as WindowWithDirectoryPicker;
+
+    if (windowWithPicker.showDirectoryPicker) {
+      try {
+        const directoryHandle = await windowWithPicker.showDirectoryPicker();
+        const folderName = directoryHandle.name;
+
+        const initialIsEmpty = currentFiles.length === 0 && currentFolders.length === 0;
+        frozenContentRef.current = initialIsEmpty ? 'empty' : 'files';
+        frozenFilesRef.current = [...currentFiles];
+        frozenFoldersRef.current = [...currentFolders];
+        setUploading(true);
+
+        try {
+          const entries: Array<{ name: string; kind: string }> = [];
+          for await (const entry of directoryHandle.values()) {
+            entries.push(entry);
+          }
+
+          if (entries.length === 0) {
+            const sanitizedName = sanitizeFileName(folderName);
+            const uniqueName = generateUniqueName(sanitizedName, existingFolderNames);
+
+            await dispatch(
+              createFolder({
+                name: uniqueName,
+                parentId: currentFolderId,
+                dataRoomId: activeDataRoomId,
+              })
+            ).unwrap();
+
+            toast({
+              title: 'Upload complete',
+              description: `Folder "${uniqueName}" created`,
+            });
+          } else {
+            interface DirectoryHandle {
+              name: string;
+              kind: string;
+              getFile: (name: string) => Promise<File>;
+              getDirectoryHandle: (name: string) => Promise<DirectoryHandle>;
+              values: () => AsyncIterableIterator<DirectoryHandle>;
+            }
+
+            interface ProcessedEntry {
+              file?: File;
+              folderName?: string;
+              relativePath: string;
+              folderPath: string[];
+            }
+
+            const processDirectory = async (
+              dirHandle: DirectoryHandle,
+              basePath: string[] = []
+            ): Promise<{ files: ProcessedEntry[]; folders: Array<{ name: string; folderPath: string[] }> }> => {
+              const files: ProcessedEntry[] = [];
+              const folders: Array<{ name: string; folderPath: string[] }> = [];
+              const currentPath = [...basePath, dirHandle.name];
+
+              folders.push({
+                name: dirHandle.name,
+                folderPath: basePath,
+              });
+
+              for await (const entry of dirHandle.values()) {
+                if (entry.kind === 'file') {
+                  try {
+                    const file = await entry.getFile(entry.name);
+                    files.push({
+                      file,
+                      relativePath: [...currentPath, entry.name].join('/'),
+                      folderPath: currentPath,
+                    });
+                  } catch (error) {
+                    console.error(`Failed to get file ${entry.name}:`, error);
+                  }
+                } else if (entry.kind === 'directory') {
+                  const subDirHandle = await dirHandle.getDirectoryHandle(entry.name);
+                  const result = await processDirectory(subDirHandle, currentPath);
+                  files.push(...result.files);
+                  folders.push(...result.folders);
+                }
+              }
+
+              return { files, folders };
+            };
+
+            const { files: processedFiles, folders: processedFolders } = await processDirectory(
+              directoryHandle as unknown as DirectoryHandle,
+              []
+            );
+
+            const createFolderStructure = async (
+              folders: Array<{ name: string; folderPath: string[] }>,
+              baseFolderId: string | null
+            ): Promise<Map<string, string>> => {
+              const folderMap = new Map<string, string>();
+              const updatedFolderNames = [...existingFolderNames];
+
+              const sortedFolders = [...folders].sort((a, b) => a.folderPath.length - b.folderPath.length);
+
+              for (const folderInfo of sortedFolders) {
+                const parentPath = folderInfo.folderPath.join('/');
+                const parentId = folderMap.get(parentPath) || baseFolderId;
+
+                const sanitizedName = sanitizeFileName(folderInfo.name);
+                const uniqueName = generateUniqueName(sanitizedName, updatedFolderNames);
+                updatedFolderNames.push(uniqueName);
+
+                try {
+                  const newFolder = await dispatch(
+                    createFolder({
+                      name: uniqueName,
+                      parentId: parentId,
+                      dataRoomId: activeDataRoomId,
+                    })
+                  ).unwrap();
+
+                  const currentPath = folderInfo.folderPath.length > 0
+                    ? `${parentPath}/${folderInfo.name}`
+                    : folderInfo.name;
+                  folderMap.set(currentPath, newFolder.id);
+                } catch (error) {
+                  console.error(`Failed to create folder ${folderInfo.name}:`, error);
+                }
+              }
+
+              return folderMap;
+            };
+
+            const folderMap = await createFolderStructure(processedFolders, currentFolderId);
+
+            const results = { filesSuccess: 0, filesFailed: 0 };
+            const updatedFileNames = [...existingNames];
+
+            for (const entry of processedFiles) {
+              if (!entry.file) continue;
+
+              try {
+                const file = entry.file;
+                const pathParts = entry.relativePath.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const folderPath = entry.folderPath.join('/');
+                const targetFolderId = folderMap.get(folderPath) || currentFolderId;
+
+                const typeValidation = validateFileType(file);
+                if (!typeValidation.valid) {
+                  toast({
+                    title: 'Upload failed',
+                    description: `${entry.relativePath}: ${typeValidation.error}`,
+                    variant: 'destructive',
+                  });
+                  results.filesFailed++;
+                  continue;
+                }
+
+                const sizeValidation = validateFileSize(file, 10);
+                if (!sizeValidation.valid) {
+                  toast({
+                    title: 'Upload failed',
+                    description: `${entry.relativePath}: ${sizeValidation.error}`,
+                    variant: 'destructive',
+                  });
+                  results.filesFailed++;
+                  continue;
+                }
+
+                const sanitizedName = sanitizeFileName(fileName);
+                const uniqueName = generateUniqueName(sanitizedName, updatedFileNames);
+                updatedFileNames.push(uniqueName);
+
+                const arrayBuffer = await file.arrayBuffer();
+                const fileType = getFileType(file);
+
+                await dispatch(
+                  createFile({
+                    name: uniqueName,
+                    folderId: targetFolderId,
+                    dataRoomId: activeDataRoomId,
+                    type: fileType,
+                    size: file.size,
+                    content: arrayBuffer,
+                  })
+                ).unwrap();
+
+                results.filesSuccess++;
+              } catch (error) {
+                results.filesFailed++;
+                toast({
+                  title: 'Upload failed',
+                  description: `${entry.relativePath}: An error occurred while uploading`,
+                  variant: 'destructive',
+                });
+              }
+            }
+
+            const parts: string[] = [];
+            if (results.filesSuccess > 0) {
+              parts.push(`${results.filesSuccess} file${results.filesSuccess > 1 ? 's' : ''} uploaded`);
+            }
+            if (processedFolders.length > 0) {
+              parts.push(`${processedFolders.length} folder${processedFolders.length > 1 ? 's' : ''} created`);
+            }
+            if (results.filesFailed > 0) {
+              parts.push(`${results.filesFailed} failed`);
+            }
+
+            if (parts.length > 0) {
+              toast({
+                title: 'Upload complete',
+                description: parts.join(', '),
+              });
+            }
+          }
+        } catch (error) {
+          toast({
+            title: 'Upload failed',
+            description: 'An error occurred while creating folder',
+            variant: 'destructive',
+          });
+        } finally {
+          setUploading(false);
+          setTimeout(() => {
+            frozenContentRef.current = null;
+            frozenFilesRef.current = [];
+            frozenFoldersRef.current = [];
+          }, 100);
+        }
+        return;
+      } catch (error) {
+        console.error('Error selecting folder:', error);
+      }
+    }
+
+    folderInputRef.current?.click();
+  }, [activeDataRoomId, currentFolderId, existingFolderNames, existingNames, currentFiles, currentFolders, dispatch, toast]);
+
+  const handleFolderSelect = useCallback(
+    async (fileList: FileList | null) => {
+      if (!activeDataRoomId) {
+        return;
+      }
+
+      if (!fileList || fileList.length === 0) {
+        toast({
+          title: 'Empty folder',
+          description: 'Empty folders cannot be uploaded via folder selection. Please use "Create Folder" or add files to the folder first.',
+          variant: 'destructive',
+        });
+        if (folderInputRef.current) {
+          folderInputRef.current.value = '';
+        }
+        return;
+      }
+
+      type FileWithRelativePath = File & {
+        webkitRelativePath?: string;
+      };
+
+      const createFolderStructureFromPaths = async (
+        filePaths: string[],
+        baseFolderId: string | null
+      ): Promise<Map<string, string>> => {
+        const folderMap = new Map<string, string>();
+        const updatedFolderNames = [...existingFolderNames];
+        const folderPaths = new Set<string>();
+
+        for (const filePath of filePaths) {
+          const parts = filePath.split('/').slice(0, -1);
+          let currentPath = '';
+          for (const part of parts) {
+            if (currentPath) {
+              currentPath += '/' + part;
+            } else {
+              currentPath = part;
+            }
+            folderPaths.add(currentPath);
+          }
+        }
+
+        const sortedPaths = Array.from(folderPaths).sort((a, b) => {
+          const depthA = a.split('/').length;
+          const depthB = b.split('/').length;
+          return depthA - depthB;
+        });
+
+        for (const folderPath of sortedPaths) {
+          const parts = folderPath.split('/');
+          const folderName = parts[parts.length - 1];
+          const parentPath = parts.slice(0, -1).join('/');
+          const parentId = folderMap.get(parentPath) || baseFolderId;
+
+          const sanitizedName = sanitizeFileName(folderName);
+          const uniqueName = generateUniqueName(sanitizedName, updatedFolderNames);
+          updatedFolderNames.push(uniqueName);
+
+          try {
+            const newFolder = await dispatch(
+              createFolder({
+                name: uniqueName,
+                parentId: parentId,
+                dataRoomId: activeDataRoomId,
+              })
+            ).unwrap();
+
+            folderMap.set(folderPath, newFolder.id);
+          } catch (error) {
+            console.error(`Failed to create folder ${folderName}:`, error);
+          }
+        }
+
+        return folderMap;
+      };
+
+      const initialIsEmpty = currentFiles.length === 0 && currentFolders.length === 0;
+      frozenContentRef.current = initialIsEmpty ? 'empty' : 'files';
+      frozenFilesRef.current = [...currentFiles];
+      frozenFoldersRef.current = [...currentFolders];
+      setUploading(true);
+
+      const files = Array.from(fileList);
+      const results = { filesSuccess: 0, filesFailed: 0, foldersCreated: 0 };
+
+      try {
+        const hasRelativePaths = files.some((f) => (f as FileWithRelativePath).webkitRelativePath);
+
+        if (hasRelativePaths) {
+          const filePaths = files.map((f) => (f as FileWithRelativePath).webkitRelativePath || f.name);
+          const folderMap = await createFolderStructureFromPaths(filePaths, currentFolderId);
+          results.foldersCreated = folderMap.size;
+
+          const updatedFileNames = [...existingNames];
+
+          for (const file of files) {
+            try {
+              const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name;
+              const pathParts = relativePath.split('/');
+              const fileName = pathParts[pathParts.length - 1];
+              const folderPath = pathParts.slice(0, -1).join('/');
+              const targetFolderId = folderMap.get(folderPath) || currentFolderId;
+
+              const typeValidation = validateFileType(file);
+              if (!typeValidation.valid) {
+                toast({
+                  title: 'Upload failed',
+                  description: `${relativePath}: ${typeValidation.error}`,
+                  variant: 'destructive',
+                });
+                results.filesFailed++;
+                continue;
+              }
+
+              const sizeValidation = validateFileSize(file, 10);
+              if (!sizeValidation.valid) {
+                toast({
+                  title: 'Upload failed',
+                  description: `${relativePath}: ${sizeValidation.error}`,
+                  variant: 'destructive',
+                });
+                results.filesFailed++;
+                continue;
+              }
+
+              const sanitizedName = sanitizeFileName(fileName);
+              const uniqueName = generateUniqueName(sanitizedName, updatedFileNames);
+              updatedFileNames.push(uniqueName);
+
+              const arrayBuffer = await file.arrayBuffer();
+              const fileType = getFileType(file);
+
+              await dispatch(
+                createFile({
+                  name: uniqueName,
+                  folderId: targetFolderId,
+                  dataRoomId: activeDataRoomId,
+                  type: fileType,
+                  size: file.size,
+                  content: arrayBuffer,
+                })
+              ).unwrap();
+
+              results.filesSuccess++;
+            } catch (error) {
+              results.filesFailed++;
+              const fileWithPath = file as FileWithRelativePath;
+              toast({
+                title: 'Upload failed',
+                description: `${fileWithPath.webkitRelativePath || file.name}: An error occurred while uploading`,
+                variant: 'destructive',
+              });
+            }
+          }
+
+          const parts: string[] = [];
+          if (results.filesSuccess > 0) {
+            parts.push(`${results.filesSuccess} file${results.filesSuccess > 1 ? 's' : ''} uploaded`);
+          }
+          if (results.foldersCreated > 0) {
+            parts.push(`${results.foldersCreated} folder${results.foldersCreated > 1 ? 's' : ''} created`);
+          }
+          if (results.filesFailed > 0) {
+            parts.push(`${results.filesFailed} failed`);
+          }
+
+          if (parts.length > 0) {
+            toast({
+              title: 'Upload complete',
+              description: parts.join(', '),
+            });
+          }
+        } else {
+          await handleFileSelect(fileList);
+        }
+      } catch (error) {
+        toast({
+          title: 'Upload failed',
+          description: 'An error occurred while uploading folder',
+          variant: 'destructive',
+        });
+      } finally {
+        setUploading(false);
+        if (folderInputRef.current) {
+          folderInputRef.current.value = '';
+        }
+        setTimeout(() => {
+          frozenContentRef.current = null;
+          frozenFilesRef.current = [];
+          frozenFoldersRef.current = [];
+        }, 100);
+      }
+    },
+    [activeDataRoomId, currentFolderId, existingNames, existingFolderNames, currentFiles, currentFolders, dispatch, toast, handleFileSelect]
+  );
+
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
       dragCounterRef.current = 0;
-      handleFileSelect(e.dataTransfer.files);
+
+      if (!activeDataRoomId) {
+        return;
+      }
+
+      if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+        try {
+          const processedData = await processDataTransferItems(e.dataTransfer.items);
+          await handleFolderAndFileUpload(processedData);
+        } catch (error) {
+          console.error('Error processing drag & drop items:', error);
+          handleFileSelect(e.dataTransfer.files);
+        }
+      } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleFileSelect(e.dataTransfer.files);
+      }
     },
-    [handleFileSelect]
+    [activeDataRoomId, handleFileSelect, handleFolderAndFileUpload]
   );
 
 
@@ -327,6 +1001,10 @@ export const Layout = () => {
                         <Upload className="h-4 w-4 mr-2" />
                         Upload Files
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleFolderSelectClick}>
+                        <Folder className="h-4 w-4 mr-2" />
+                        Upload Folder
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <Button
@@ -410,6 +1088,10 @@ export const Layout = () => {
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Files
               </ContextMenuItem>
+              <ContextMenuItem onClick={handleFolderSelectClick}>
+                <Folder className="h-4 w-4 mr-2" />
+                Upload Folder
+              </ContextMenuItem>
               <ContextMenuItem onClick={openFolderInfoDialog}>
                 <Info className="h-4 w-4 mr-2" />
                 Folder Information
@@ -422,6 +1104,14 @@ export const Layout = () => {
             multiple
             accept=".pdf,.docx,.xls,.xlsx,.txt,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv"
             onChange={(e) => handleFileSelect(e.target.files)}
+            className="hidden"
+            disabled={uploading}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            {...({ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
+            onChange={(e) => handleFolderSelect(e.target.files)}
             className="hidden"
             disabled={uploading}
           />
